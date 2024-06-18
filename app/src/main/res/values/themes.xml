@@ -1,0 +1,32 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.LoRasPair" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimaryDark">#1769aa</item>
+        <item name="colorPrimary">#2196f3</item>
+        <item name="colorPrimaryVariant">#4dabf5</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">#2979ff</item>
+        <item name="colorSecondaryVariant">#5393ff</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <!-- Menu text color. -->
+        <item name="android:itemTextAppearance">@style/MenuTextColor</item>
+        <!-- Customize your theme here. -->
+    </style>
+
+    <style name="Theme.LoRasPair.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+    
+    <style name="MenuTextColor" parent="@android:style/TextAppearance.Widget.IconMenu.Item">
+        <item name="android:textColor">@color/gray</item>
+    </style>
+
+    <style name="Theme.LoRasPair.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
+
+    <style name="Theme.LoRasPair.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+</resources>

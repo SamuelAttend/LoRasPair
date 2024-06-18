@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+<!--    <item-->
+<!--        android:id="@+id/clear"-->
+<!--        android:icon="@drawable/ic_delete"-->
+<!--        android:title="@string/terminal_clear"-->
+<!--        app:showAsAction="always" />-->
+<!--    <item-->
+<!--        android:id="@+id/newline"-->
+<!--        android:title="@string/terminal_newline"-->
+<!--        app:showAsAction="never" />-->
+<!--    <item-->
+<!--        android:id="@+id/hex"-->
+<!--        android:title="@string/terminal_hex"-->
+<!--        android:checkable="true"-->
+<!--        app:showAsAction="never" />-->
+</menu>
