@@ -76,8 +76,11 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     BluetoothListenersManager.BluetoothListener, LocationListener {
     object Constants { // Статические поля в пространстве имён Constants
         const val DEFAULT_ZOOM = 3.0
+        const val MY_LOCATION_ZOOM = 14.0
         const val MIN_ZOOM = 1.0
-        const val MAX_ZOOM = 17.0
+        const val MAX_ZOOM = 20.0
+        const val MIN_SAVE_ZOOM = 1.0
+        const val MAX_SAVE_ZOOM = 17.0
         const val TILE_SIZE = 23780
         const val MAP_DATABASE_EXTENSION = ".sqlite"
     }
@@ -87,8 +90,10 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     private lateinit var sharedPreferences: SharedPreferences // Хранилище примитивных данных карты
 
     private var boundingBox = BoundingBox() // Зона для сохранения карты
-    private var minZoom = Constants.MIN_ZOOM.toInt() // Минимальное приближение
-    private var maxZoom = Constants.MAX_ZOOM.toInt() // Максимальное приближение
+    private var minSaveZoom =
+        Constants.MIN_SAVE_ZOOM.toInt() // Минимальное приближение для загрузки
+    private var maxSaveZoom =
+        Constants.MAX_SAVE_ZOOM.toInt() // Максимальное приближение для загрузки
     private lateinit var tilesDirectory: File // Путь для сохранения карт в формате базы данных
 
     private var overlayMarker: Drawable? = null // Маркер для точек на карте
@@ -187,15 +192,15 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
         val tilesAmount: Int =
             cacheManager.possibleTilesInArea(
                 boundingBox,
-                minZoom,
-                maxZoom
+                minSaveZoom,
+                maxSaveZoom
             ) // Запрос приблизительного количества изображений карт в участке (может вернуться отрицательное значение, я предполагаю, что это оверфлоу, поэтому привожу к типу Long)
         val positiveTilesAmount =
             if (tilesAmount < 0) (Int.MAX_VALUE.toLong() + abs(tilesAmount).toLong()) else tilesAmount.toLong() // Приведение количества изображений карт в участке к типу Long
         binding.viewMapSaving.estimatedTilesAmount.text = getString(
             R.string.map_download_info,
-            minZoom,
-            maxZoom,
+            minSaveZoom,
+            maxSaveZoom,
             positiveTilesAmount,
             ((positiveTilesAmount * Constants.TILE_SIZE).toFloat() / 1_000_000)
         ) // Отображение информации о загрузке участка карты
@@ -379,8 +384,8 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
                 override fun onStopTrackingTouch(slider: RangeSlider) { // Вызывается при прекращении изменения значений ползунка уровней приближения
                     val values = slider.values // Взятие данных с ползунка
-                    minZoom = values[0].toInt()
-                    maxZoom = values[1].toInt()
+                    minSaveZoom = values[0].toInt()
+                    maxSaveZoom = values[1].toInt()
                     updateEstimatedData() // Обновление информации о загрузке участка карты
                 }
 
@@ -408,8 +413,8 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                     cacheManager.downloadAreaAsync(
                         context,
                         boundingBox,
-                        minZoom,
-                        maxZoom,
+                        minSaveZoom,
+                        maxSaveZoom,
                         object : CacheManagerCallback {
                             override fun onTaskComplete() {
                                 Toast.makeText(context, "Download complete!", Toast.LENGTH_LONG)
@@ -624,7 +629,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                     val location = myLocationOverlay.myLocation
                     location?.let {
                         val geoPoint = GeoPoint(it)
-                        zoomTo(14.0)
+                        zoomTo(Constants.MY_LOCATION_ZOOM)
                         setCenter(geoPoint)
                         animateTo(geoPoint)
                         updateMyLocationRuler() // Обновление линейки
@@ -632,7 +637,10 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                 }
             }
         }
-        val directionIcon = BitmapFactory.decodeResource(resources, org.osmdroid.library.R.drawable.twotone_navigation_black_48)
+        val directionIcon = BitmapFactory.decodeResource(
+            resources,
+            org.osmdroid.library.R.drawable.twotone_navigation_black_48
+        )
         myLocationOverlay.setDirectionIcon(directionIcon)
 
         myLocationRuler = Polyline(map)
