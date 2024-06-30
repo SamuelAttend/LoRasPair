@@ -44,7 +44,7 @@
     <string name="map_settings">Map Settings</string>
     <string name="map_offline_mode">OFFLINE MODE</string>
     <string name="map_ruler">RULER</string>
-    <string name="map_ruler_length_m">%1$.3f m</string>
+    <string name="map_ruler_length_m">%1$.0f m</string>
     <string name="map_ruler_length_km">%1$.3f km</string>
     <string name="map_delete_offline">DELETE OFFLINE MAPS</string>
     <string name="map_delete_gps">DELETE GPS DATA</string>

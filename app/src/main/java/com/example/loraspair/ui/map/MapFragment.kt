@@ -1,17 +1,23 @@
 package com.example.loraspair.ui.map
 
+import android.Manifest
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
+import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.drawable.Drawable
+import android.location.GnssStatus
+import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
 import android.util.Log
-import com.example.loraspair.R
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -23,11 +29,13 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.RadioButton
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.loraspair.App
 import com.example.loraspair.DeviceCommandsManager
+import com.example.loraspair.R
 import com.example.loraspair.SharedPreferencesConstants
 import com.example.loraspair.connection.BluetoothListenersManager
 import com.example.loraspair.database.Gps
@@ -61,10 +69,11 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import kotlin.math.abs
 
+
 // Фрагмент карты
 class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     BoundingBoxView.BoundingBoxListener, OnTouchListener, MapListener,
-    BluetoothListenersManager.BluetoothListener {
+    BluetoothListenersManager.BluetoothListener, LocationListener {
     object Constants { // Статические поля в пространстве имён Constants
         const val DEFAULT_ZOOM = 3.0
         const val MIN_ZOOM = 1.0
@@ -87,6 +96,20 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     private lateinit var itemizedIconOverlay: ItemizedIconOverlay<OverlayItem> // Обёртка над списком точек на карте
     private lateinit var myLocationOverlay: MyLocationNewOverlay // Моя позиция на карте
     private lateinit var myLocationRuler: Polyline // Линейка от центра экрана до моей позиции на карте
+    private lateinit var locationManager: LocationManager
+    private val gpsListener = object : GnssStatus.Callback() {
+        override fun onStarted() {
+            super.onStarted()
+            updateMyLocationRuler()
+        }
+
+        override fun onStopped() {
+            super.onStopped()
+            updateMyLocationRuler()
+        }
+    }
+    private var gpsHandler: Handler? = null
+    private lateinit var gpsMyLocationProvider: GpsMyLocationProvider
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -104,6 +127,8 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                 Context.MODE_PRIVATE
             ) // Запрос хранилища примитивных данных карты
 
+        gpsMyLocationProvider = GpsMyLocationProvider(context)
+
         initTilesDirectory() // Настройка пути для сохранения карт в формате базы данных
 
         initMap() // Настройка карты
@@ -119,11 +144,28 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
         BluetoothListenersManager.addListener(this) // Добавление фрагмента к слушателям Bluetooth
 
+        locationManager = App.self.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        if (ContextCompat.checkSelfPermission(
+                App.self.applicationContext,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                requireActivity(),
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                100
+            )
+        }
+        locationManager.registerGnssStatusCallback(gpsListener, gpsHandler)
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 30000L, 0.0f, this)
+
         return binding.root
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        locationManager.removeUpdates(this)
+        locationManager.unregisterGnssStatusCallback(gpsListener)
         BluetoothListenersManager.removeListener(this) // Удаление фрагмента из слушателей Bluetooth
         binding.boundingBox.listener =
             null // Удаление слушателя изменения зоны для сохранения карты
@@ -572,17 +614,32 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
         val map = binding.map
 
         myLocationOverlay = MyLocationNewOverlay(
-            GpsMyLocationProvider(context),
+            gpsMyLocationProvider,
             map
         ) // Инициализация моей позиции на карте
         myLocationOverlay.enableMyLocation() // Включение обновления моей позиции на карте
+        myLocationOverlay.runOnFirstFix {
+            activity?.runOnUiThread {
+                with(map.controller) {
+                    val location = myLocationOverlay.myLocation
+                    location?.let {
+                        val geoPoint = GeoPoint(it)
+                        zoomTo(14.0)
+                        setCenter(geoPoint)
+                        animateTo(geoPoint)
+                        updateMyLocationRuler() // Обновление линейки
+                    }
+                }
+            }
+        }
+        val directionIcon = BitmapFactory.decodeResource(resources, org.osmdroid.library.R.drawable.twotone_navigation_black_48)
+        myLocationOverlay.setDirectionIcon(directionIcon)
 
         myLocationRuler = Polyline(map)
         with(myLocationRuler.paint) {
             pathEffect = DashPathEffect(floatArrayOf(10.0f, 20.0f), 0.0f)
             color = Color.RED
         }
-        updateMyLocationRuler() // Обновление линейки
 
         overlayMarker = ContextCompat.getDrawable(
             App.self.applicationContext,
@@ -724,43 +781,31 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
     private fun updateMyLocationRuler() { // Обновление линейки
         if (sharedPreferences.getBoolean(SharedPreferencesConstants.MAP_RULER, false)) {
-            val map = binding.map
-            try {
+            myLocationOverlay.myLocation?.let {
                 myLocationRuler.setPoints(
                     listOf(
-                        GeoPoint(map.mapCenter),
-                        myLocationOverlay.myLocation
+                        GeoPoint(binding.map.mapCenter),
+                        it
                     )
-                ) // Моя текущая позиция
-            } catch (_: NullPointerException) {
-                try {
-                    val locationManager =
-                        App.self.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                    val location =
-                        locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                    location?.let {
-                        myLocationRuler.setPoints(
-                            listOf(
-                                GeoPoint(map.mapCenter),
-                                GeoPoint(location)
-                            )
-                        ) // Моя последняя позициця
-                    }
-                } catch (_: SecurityException) {
-                }
+                ) // Установка позиций линейки
+
+                val length = myLocationRuler.distance
+                binding.rulerLength.text = if (length > 1000) getString(
+                    R.string.map_ruler_length_km,
+                    length / 1000.0
+                ) else getString(
+                    R.string.map_ruler_length_m, length
+                ) // Установка расстояния
+                binding.rulerLength.visibility = View.VISIBLE
             }
-            val length = myLocationRuler.distance
-            binding.rulerLength.text = if (length > 1000) getString(
-                R.string.map_ruler_length_km,
-                length / 1000.0
-            ) else getString(
-                R.string.map_ruler_length_m, length
-            ) // Установка расстояния
-            binding.rulerLength.visibility = View.VISIBLE
         } else { // Сброс линейки
             myLocationRuler.setPoints(listOf())
             binding.rulerLength.visibility = View.GONE
         }
         binding.map.invalidate() // Переотрисовка карты
+    }
+
+    override fun onLocationChanged(location: Location) {
+        updateMyLocationRuler()
     }
 }
