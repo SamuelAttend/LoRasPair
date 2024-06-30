@@ -20,6 +20,12 @@
             android:layout_height="wrap_content"
             android:text="@string/map_offline_mode" />
 
+        <CheckBox
+            android:id="@+id/ruler_check_box"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/map_ruler" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/delete_offline_maps_button"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"

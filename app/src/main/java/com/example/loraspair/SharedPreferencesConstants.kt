@@ -18,4 +18,5 @@ object SharedPreferencesConstants { // Статические поля в про
     const val MAP_MODE = "map_mode"
     const val MAP_MODE_ONLINE = "online"
     const val MAP_MODE_OFFLINE = "offline"
+    const val MAP_RULER = "map_ruler"
 }

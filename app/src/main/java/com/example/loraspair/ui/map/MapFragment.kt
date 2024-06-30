@@ -5,7 +5,10 @@ import android.app.Dialog
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
+import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.drawable.Drawable
+import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
 import com.example.loraspair.R
@@ -52,6 +55,9 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.ItemizedIconOverlay
 import org.osmdroid.views.overlay.OverlayItem
+import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import kotlin.math.abs
 
@@ -79,6 +85,8 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     private var overlayMarker: Drawable? = null // Маркер для точек на карте
     private val overlayItems = mutableListOf<OverlayItem>() // Список точек на карте
     private lateinit var itemizedIconOverlay: ItemizedIconOverlay<OverlayItem> // Обёртка над списком точек на карте
+    private lateinit var myLocationOverlay: MyLocationNewOverlay // Моя позиция на карте
+    private lateinit var myLocationRuler: Polyline // Линейка от центра экрана до моей позиции на карте
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -120,6 +128,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
         binding.boundingBox.listener =
             null // Удаление слушателя изменения зоны для сохранения карты
         binding.map.removeMapListener(this) // Удаление слушателя взаимодействия с картой
+        myLocationOverlay.disableMyLocation() // Отключение обновления моей позиции на карте
     }
 
     override fun onResume() {
@@ -275,6 +284,19 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                         putString(
                             SharedPreferencesConstants.MAP_MODE,
                             if (isChecked) SharedPreferencesConstants.MAP_MODE_OFFLINE else SharedPreferencesConstants.MAP_MODE_ONLINE
+                        )
+                        apply()
+                    }
+                }
+
+                val rulerCheckBox = dialog.findViewById<CheckBox>(R.id.ruler_check_box)
+                rulerCheckBox.isChecked =
+                    sharedPreferences.getBoolean(SharedPreferencesConstants.MAP_RULER, false)
+                rulerCheckBox.setOnCheckedChangeListener { _, isChecked -> // Переключение линейки
+                    with(sharedPreferences.edit()) {// Сохранение состояния линейки в хранилище примитивных данных карты
+                        putBoolean(
+                            SharedPreferencesConstants.MAP_RULER,
+                            isChecked
                         )
                         apply()
                     }
@@ -475,7 +497,10 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
         return tileSourceName
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) { // Вызывается при изменении значений хранилища примитивных данных карты
+    override fun onSharedPreferenceChanged(
+        sharedPreferences: SharedPreferences?,
+        key: String?
+    ) { // Вызывается при изменении значений хранилища примитивных данных карты
         when (key) {
             SharedPreferencesConstants.MAP_TILE_SOURCE -> {
                 binding.map.setTileSource(getCurrentTileSource())
@@ -483,6 +508,10 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
             SharedPreferencesConstants.MAP_MODE -> {
                 updateMapTiles() // Обновление карты
+            }
+
+            SharedPreferencesConstants.MAP_RULER -> {
+                updateMyLocationRuler() // Обновление линейки
             }
         }
     }
@@ -540,6 +569,21 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     }
 
     private fun initMapOverlays() { // Настройка оверлея карты
+        val map = binding.map
+
+        myLocationOverlay = MyLocationNewOverlay(
+            GpsMyLocationProvider(context),
+            map
+        ) // Инициализация моей позиции на карте
+        myLocationOverlay.enableMyLocation() // Включение обновления моей позиции на карте
+
+        myLocationRuler = Polyline(map)
+        with(myLocationRuler.paint) {
+            pathEffect = DashPathEffect(floatArrayOf(10.0f, 20.0f), 0.0f)
+            color = Color.RED
+        }
+        updateMyLocationRuler() // Обновление линейки
+
         overlayMarker = ContextCompat.getDrawable(
             App.self.applicationContext,
             org.osmdroid.library.R.drawable.marker_default
@@ -587,12 +631,17 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
             with(binding.map.overlays) {// Использование области видимости списка графических элементов карты
                 clear() // Удаление всех графических элементов поверх карты
                 add(CopyrightOverlay(context)) // Добавление надписи авторских прав
+                add(myLocationOverlay) // Добавление моей позиции
+                add(myLocationRuler) // Добавление линейки
                 add(itemizedIconOverlay) // Добавление обёрки над списком точек на карте для их отображения
             }
         }
     }
 
-    override fun onTouch(view: View?, event: MotionEvent): Boolean { // Вызывается при прикосновении к карте
+    override fun onTouch(
+        view: View?,
+        event: MotionEvent
+    ): Boolean { // Вызывается при прикосновении к карте
         when (event.action) {
             MotionEvent.ACTION_UP -> {
                 updateBoundingBox()
@@ -603,6 +652,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     }
 
     override fun onScroll(event: ScrollEvent?): Boolean { // Вызывается при передвижении карты
+        updateMyLocationRuler() // Обновление линейки
         return true
     }
 
@@ -624,14 +674,24 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
             DeviceCommandsManager.Message.Variant.TEXT -> {}
             DeviceCommandsManager.Message.Variant.GPS -> { // Если сообщение является сообщением о координатах
                 lifecycleScope.launch {// Корутина жизненного цикла
-                    val sign = DeviceCommandsManager.Message.gps.from // Позывной отправителя полученных координат
-                    val oldOverlayItem = overlayItems.findLast { it.title == sign } // Запрос последней точки, принадлежащей пользователю с данным позывным, из списка точек
-                    val user = App.database.userDao().getUserByUserSign(sign) // Запрос пользователя из базы данных с позывным отправителя
+                    val sign =
+                        DeviceCommandsManager.Message.gps.from // Позывной отправителя полученных координат
+                    val oldOverlayItem =
+                        overlayItems.findLast { it.title == sign } // Запрос последней точки, принадлежащей пользователю с данным позывным, из списка точек
+                    val user = App.database.userDao()
+                        .getUserByUserSign(sign) // Запрос пользователя из базы данных с позывным отправителя
                     user?.let {// Если пользователь с позывным отправителя существует в базе данных
                         val gps =
-                            App.database.gpsDao().getLastGpsFromUserByUserId(user.user_id, 0, 1) // Запрос последних координат пользователя
+                            App.database.gpsDao().getLastGpsFromUserByUserId(
+                                user.user_id,
+                                0,
+                                1
+                            ) // Запрос последних координат пользователя
                         gps.forEach {// Проверка того, существуют ли в базе данных записи о координатах пользователя
-                            val newOverlayItem = gpsToOverlayItem(it, user.user_sign) // Инициализация новой точки последних координат пользователя
+                            val newOverlayItem = gpsToOverlayItem(
+                                it,
+                                user.user_sign
+                            ) // Инициализация новой точки последних координат пользователя
                             newOverlayItem.setMarker(overlayMarker) // Установка маркера точки на стандартную иконку
                             overlayItems.add(newOverlayItem) // Добавление точки в список точек на карте
                             itemizedIconOverlay.addItem(newOverlayItem) // Добавление точки в обёртку над списком точек на карте
@@ -660,5 +720,47 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                 (gps.altitude.toDouble())
             )
         )
+    }
+
+    private fun updateMyLocationRuler() { // Обновление линейки
+        if (sharedPreferences.getBoolean(SharedPreferencesConstants.MAP_RULER, false)) {
+            val map = binding.map
+            try {
+                myLocationRuler.setPoints(
+                    listOf(
+                        GeoPoint(map.mapCenter),
+                        myLocationOverlay.myLocation
+                    )
+                ) // Моя текущая позиция
+            } catch (_: NullPointerException) {
+                try {
+                    val locationManager =
+                        App.self.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                    val location =
+                        locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                    location?.let {
+                        myLocationRuler.setPoints(
+                            listOf(
+                                GeoPoint(map.mapCenter),
+                                GeoPoint(location)
+                            )
+                        ) // Моя последняя позициця
+                    }
+                } catch (_: SecurityException) {
+                }
+            }
+            val length = myLocationRuler.distance
+            binding.rulerLength.text = if (length > 1000) getString(
+                R.string.map_ruler_length_km,
+                length / 1000.0
+            ) else getString(
+                R.string.map_ruler_length_m, length
+            ) // Установка расстояния
+            binding.rulerLength.visibility = View.VISIBLE
+        } else { // Сброс линейки
+            myLocationRuler.setPoints(listOf())
+            binding.rulerLength.visibility = View.GONE
+        }
+        binding.map.invalidate() // Переотрисовка карты
     }
 }
