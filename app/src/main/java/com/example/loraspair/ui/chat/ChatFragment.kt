@@ -242,7 +242,7 @@ class ChatFragment : Fragment(), OnSharedPreferenceChangeListener,
 
     private fun initDeleteChatButton() { // Настройка кнопки удаления чата
         binding.deleteChatButton.setOnClickListener {// Установка слушателя нажатия на кнопку удаления чата
-            lifecycleScope.launch {
+            lifecycleScope.launch {// Корутина жизненного цикла
                 val sign = getChatSign()
                 val dialogBuilder =
                     AlertDialog.Builder(context) // Инициализация построителя диалогового окна удаления чата
@@ -338,7 +338,7 @@ class ChatFragment : Fragment(), OnSharedPreferenceChangeListener,
             DeviceCommandsManager.Message.Variant.TEXT -> { // Если сообщение является текстовым
                 val sign = getChatSign()
                 if (DeviceCommandsManager.Message.text.from == sign) {
-                    lifecycleScope.launch {
+                    lifecycleScope.launch {// Корутина жизненного цикла
                         val adapter = binding.messages.adapter as ListMessageAdapter
                         val userDao = App.database.userDao()
                         val user = userDao.getUserByUserSign(sign)

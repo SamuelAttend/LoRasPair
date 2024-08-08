@@ -87,7 +87,8 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
     private lateinit var binding: FragmentMapBinding // Привязка к интерфейсу фрагмента карты
     private lateinit var cacheManager: CacheManager // Менеджер сохранения карт
-    private lateinit var sharedPreferences: SharedPreferences // Хранилище примитивных данных карты
+    private lateinit var sharedPreferencesMap: SharedPreferences // Хранилище примитивных данных карты
+    private lateinit var sharedPreferencesChat: SharedPreferences // Хранилище примитивных данных чата
 
     private var boundingBox = BoundingBox() // Зона для сохранения карты
     private var minSaveZoom =
@@ -126,11 +127,16 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
             false
         ) // Установка привязки к интерфейсу фрагмента карты
 
-        sharedPreferences =
+        sharedPreferencesMap =
             App.self.getSharedPreferences(
                 SharedPreferencesConstants.MAP,
                 Context.MODE_PRIVATE
             ) // Запрос хранилища примитивных данных карты
+
+        sharedPreferencesChat = App.self.getSharedPreferences(
+            SharedPreferencesConstants.CHAT,
+            Context.MODE_PRIVATE
+        ) // Запрос хранилища примитивных данных чата
 
         gpsMyLocationProvider = GpsMyLocationProvider(context)
 
@@ -180,12 +186,14 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
     override fun onResume() {
         super.onResume()
-        sharedPreferences.registerOnSharedPreferenceChangeListener(this) // Добавление слушателя изменения значений хранилища примитивных данных карты
+        sharedPreferencesMap.registerOnSharedPreferenceChangeListener(this) // Добавление слушателя изменения значений хранилища примитивных данных карты
+        sharedPreferencesChat.registerOnSharedPreferenceChangeListener(this) // Добавление слушателя изменения значений хранилища примитивных данных чата
     }
 
     override fun onPause() {
         super.onPause()
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(this) // Удаление слушателя изменения значений хранилища примитивных данных карты
+        sharedPreferencesChat.unregisterOnSharedPreferenceChangeListener(this) // Удаление слушателя изменения значений хранилища примитивных данных чата
+        sharedPreferencesMap.unregisterOnSharedPreferenceChangeListener(this) // Удаление слушателя изменения значений хранилища примитивных данных карты
     }
 
     private fun updateEstimatedData() { // Обновление информации о загрузке участка карты
@@ -291,7 +299,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
                 dialog.setOnDismissListener {// Установка слушателя закрытия диалогового окна
                     if (openStreetMapRadioButton.isChecked) { // Если выбран источник OpenStreetMap
-                        with(sharedPreferences.edit()) {// Сохранение источника карт в хранилище примитивных данных карты
+                        with(sharedPreferencesMap.edit()) {// Сохранение источника карт в хранилище примитивных данных карты
                             putString(
                                 SharedPreferencesConstants.MAP_TILE_SOURCE,
                                 SharedPreferencesConstants.MAP_TILE_SOURCE_OpenStreetMap
@@ -299,7 +307,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                             apply()
                         }
                     } else if (openTopoRadioButton.isChecked) { // Если выбран источник OpenTopo
-                        with(sharedPreferences.edit()) { // Сохранение источника карт в хранилище примитивных данных карты
+                        with(sharedPreferencesMap.edit()) { // Сохранение источника карт в хранилище примитивных данных карты
                             putString(
                                 SharedPreferencesConstants.MAP_TILE_SOURCE,
                                 SharedPreferencesConstants.MAP_TILE_SOURCE_OpenTopo
@@ -327,7 +335,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
                 offlineModeCheckBox.isChecked =
                     (getCurrentMapMode() == SharedPreferencesConstants.MAP_MODE_OFFLINE)
                 offlineModeCheckBox.setOnCheckedChangeListener { _, isChecked -> // Переключение режимов карты (Онлайн/Офлайн)
-                    with(sharedPreferences.edit()) {// Сохранение режима карты в хранилище примитивных данных карты
+                    with(sharedPreferencesMap.edit()) {// Сохранение режима карты в хранилище примитивных данных карты
                         putString(
                             SharedPreferencesConstants.MAP_MODE,
                             if (isChecked) SharedPreferencesConstants.MAP_MODE_OFFLINE else SharedPreferencesConstants.MAP_MODE_ONLINE
@@ -338,9 +346,9 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
                 val rulerCheckBox = dialog.findViewById<CheckBox>(R.id.ruler_check_box)
                 rulerCheckBox.isChecked =
-                    sharedPreferences.getBoolean(SharedPreferencesConstants.MAP_RULER, false)
+                    sharedPreferencesMap.getBoolean(SharedPreferencesConstants.MAP_RULER, false)
                 rulerCheckBox.setOnCheckedChangeListener { _, isChecked -> // Переключение линейки
-                    with(sharedPreferences.edit()) {// Сохранение состояния линейки в хранилище примитивных данных карты
+                    with(sharedPreferencesMap.edit()) {// Сохранение состояния линейки в хранилище примитивных данных карты
                         putBoolean(
                             SharedPreferencesConstants.MAP_RULER,
                             isChecked
@@ -491,7 +499,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     private fun initCacheInfoButton() { // Настройка кнопки вывода диалогового окна с информацией о кэше
         binding.cacheInfoButton.setOnClickListener {
             Toast.makeText(activity, "Calculating...", Toast.LENGTH_SHORT).show()
-            lifecycleScope.launch {
+            lifecycleScope.launch {// Корутина жизненного цикла
                 val dialogBuilder = AlertDialog.Builder(context)
                 dialogBuilder
                     .setTitle("Cache Info")
@@ -527,12 +535,12 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     }
 
     private fun getCurrentTileSourceName(): String { // Возврат названия текущего источника карт
-        val tileSourceName = sharedPreferences.getString(
+        val tileSourceName = sharedPreferencesMap.getString(
             SharedPreferencesConstants.MAP_TILE_SOURCE,
             ""
         ) ?: ""
         if (tileSourceName.isEmpty()) {
-            with(sharedPreferences.edit()) { // Сохранение стандартного источника карт в хранилище примитивных данных карты
+            with(sharedPreferencesMap.edit()) { // Сохранение стандартного источника карт в хранилище примитивных данных карты
                 putString(
                     SharedPreferencesConstants.MAP_TILE_SOURCE,
                     SharedPreferencesConstants.MAP_TILE_SOURCE_OpenStreetMap
@@ -559,6 +567,33 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
 
             SharedPreferencesConstants.MAP_RULER -> {
                 updateMyLocationRuler() // Обновление линейки
+            }
+
+            SharedPreferencesConstants.CHAT_SIGN -> {
+                val sign =
+                    sharedPreferencesChat.getString(SharedPreferencesConstants.CHAT_SIGN, "") ?: ""
+                lifecycleScope.launch {// Корутина жизненного цикла
+                    val user = App.database.userDao().getUserByUserSign(sign)
+                    user?.let {
+                        val list =
+                            App.database.gpsDao().getLastGpsFromUserByUserId(it.user_id, 0, 1)
+                        if (list.isNotEmpty()) {
+                            val gps = list.first()
+                            activity?.runOnUiThread {
+                                with(binding.map.controller) {
+                                    val geoPoint = GeoPoint(
+                                        (gps.latitude.degrees + (gps.latitude.minutes / 60.0f)).toDouble(),
+                                        (gps.longitude.degrees + (gps.longitude.minutes / 60.0f)).toDouble(),
+                                        gps.altitude.toDouble()
+                                    )
+                                    zoomTo(Constants.MY_LOCATION_ZOOM)
+                                    setCenter(geoPoint)
+                                    animateTo(geoPoint)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -593,9 +628,9 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     }
 
     private fun getCurrentMapMode(): String { // Возврат текущего режима карты
-        val mapMode = sharedPreferences.getString(SharedPreferencesConstants.MAP_MODE, "") ?: ""
+        val mapMode = sharedPreferencesMap.getString(SharedPreferencesConstants.MAP_MODE, "") ?: ""
         if (mapMode.isEmpty()) {
-            with(sharedPreferences.edit()) {// Сохранение стандартного режима карты в хранилище примитивных данных карты
+            with(sharedPreferencesMap.edit()) {// Сохранение стандартного режима карты в хранилище примитивных данных карты
                 putString(
                     SharedPreferencesConstants.MAP_MODE,
                     SharedPreferencesConstants.MAP_MODE_ONLINE
@@ -788,7 +823,7 @@ class MapFragment : Fragment(), OnSharedPreferenceChangeListener,
     }
 
     private fun updateMyLocationRuler() { // Обновление линейки
-        if (sharedPreferences.getBoolean(SharedPreferencesConstants.MAP_RULER, false)) {
+        if (sharedPreferencesMap.getBoolean(SharedPreferencesConstants.MAP_RULER, false)) {
             myLocationOverlay.myLocation?.let {
                 myLocationRuler.setPoints(
                     listOf(

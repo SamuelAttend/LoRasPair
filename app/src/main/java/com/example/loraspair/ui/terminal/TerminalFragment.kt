@@ -1,6 +1,9 @@
 package com.example.loraspair.ui.terminal
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener
 import android.os.Bundle
@@ -30,6 +33,18 @@ class TerminalFragment : Fragment(),
     private lateinit var binding: FragmentTerminalBinding // Привязка к интерфейсу фрагмента отправки команд
     private lateinit var sharedPreferences: SharedPreferences // Хранилище примитивных данных девайса
 
+    object Constants {
+        const val ACTION = "com.example.loraspair.USER_ADDED"
+    }
+
+    private val userAddBroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action.equals(Constants.ACTION)) {
+                updateData()
+            }
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?, savedInstanceState: Bundle?
@@ -51,6 +66,10 @@ class TerminalFragment : Fragment(),
 
         initSendCommandButton() // Настройка кнопки отправки команды
 
+        val filter = IntentFilter()
+        filter.addAction(Constants.ACTION)
+        activity?.registerReceiver(userAddBroadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+
         binding.dropdownCommands.addTextChangedListener {// Добавление слушателя изменения текста в поле названия команды
             binding.commandValue.setText(
                 DeviceCommandsManager.NamedCommands.default[binding.dropdownCommands.text.toString()]
@@ -63,6 +82,7 @@ class TerminalFragment : Fragment(),
 
     override fun onDestroyView() {
         super.onDestroyView()
+        activity?.unregisterReceiver(userAddBroadcastReceiver)
         BluetoothListenersManager.removeListener(this) // Удаление фрагмента из слушателей Bluetooth
     }
 
@@ -186,7 +206,10 @@ class TerminalFragment : Fragment(),
         }
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) { // Вызывается при изменении значений хранилища примитивных данных девайса
+    override fun onSharedPreferenceChanged(
+        sharedPreferences: SharedPreferences?,
+        key: String?
+    ) { // Вызывается при изменении значений хранилища примитивных данных девайса
         if (key == SharedPreferencesConstants.DEVICE_SIGN) { // Если произошло измнение позывного девайса
             binding.dropdownFrom.setText(
                 sharedPreferences?.getString(

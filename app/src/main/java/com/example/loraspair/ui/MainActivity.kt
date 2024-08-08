@@ -41,6 +41,7 @@ import com.example.loraspair.adapters.ListUserAdapter
 import com.example.loraspair.connection.BluetoothConnectionThread
 import com.example.loraspair.connection.BluetoothListenersManager
 import com.example.loraspair.database.User
+import com.example.loraspair.ui.terminal.TerminalFragment
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
@@ -55,16 +56,20 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
     private lateinit var bluetoothAdapter: BluetoothAdapter // Адаптер Bluetooth
     private lateinit var appBarConfiguration: AppBarConfiguration // Настройщик интерфейса главной активности приложения
     private lateinit var binding: ActivityMainBinding // Привязка к интерфейсу активности приложения
-    private var bluetoothServiceButtonState = Constants.BLUETOOTH_BUTTON_CONNECT // Состояние кнопки запуска сервиса Bluetooth подключения
-    private var bluetoothServiceButtonLastClickTime: Long = 0 // Время последнего нажатия на кнопку запуска сервиса Bluetooth подключения
+    private var bluetoothServiceButtonState =
+        Constants.BLUETOOTH_BUTTON_CONNECT // Состояние кнопки запуска сервиса Bluetooth подключения
+    private var bluetoothServiceButtonLastClickTime: Long =
+        0 // Время последнего нажатия на кнопку запуска сервиса Bluetooth подключения
     private lateinit var sharedPreferences: SharedPreferences // Хранилище примитивных данных чата
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        Configuration.getInstance().userAgentValue = packageName // Установка значения пользовательского агента http для osmdroid
+        Configuration.getInstance().userAgentValue =
+            packageName // Установка значения пользовательского агента http для osmdroid
 
-        binding = ActivityMainBinding.inflate(layoutInflater) // Установка привязки к интерфейсу активности приложения
+        binding =
+            ActivityMainBinding.inflate(layoutInflater) // Установка привязки к интерфейсу активности приложения
         setContentView(binding.root)
 
         setSupportActionBar(binding.appBarMain.toolbar) // Установка тулбара для шапки
@@ -90,7 +95,10 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
         }
 
         sharedPreferences =
-            App.self.getSharedPreferences(SharedPreferencesConstants.CHAT, Service.MODE_PRIVATE) // Запрос хранилища примитивных данных чата
+            App.self.getSharedPreferences(
+                SharedPreferencesConstants.CHAT,
+                Service.MODE_PRIVATE
+            ) // Запрос хранилища примитивных данных чата
 
         initBluetoothAdapter() // Настройка адаптера Bluetooth
 
@@ -135,11 +143,17 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
             if (currentTime - bluetoothServiceButtonLastClickTime < 250) { // Если прошло менее 250 мс со времени последнего нажатия на кнопку запуска сервиса Bluetooth подключения
                 return@setOnClickListener // Отмена нажатия на кнопку
             }
-            bluetoothServiceButtonLastClickTime = currentTime // Установка времени последнего нажатия на кнопку запуска сервиса Bluetooth на текущее
+            bluetoothServiceButtonLastClickTime =
+                currentTime // Установка времени последнего нажатия на кнопку запуска сервиса Bluetooth на текущее
 
             when (bluetoothServiceButtonState) {
                 Constants.BLUETOOTH_BUTTON_DISCONNECT -> { // Если в данный момент сервис Bluetooth подключения запущен
-                    stopService(Intent(App.self.applicationContext, BluetoothService::class.java)) // Остановка сервиса Bluetooth подключения
+                    stopService(
+                        Intent(
+                            App.self.applicationContext,
+                            BluetoothService::class.java
+                        )
+                    ) // Остановка сервиса Bluetooth подключения
                 }
 
                 Constants.BLUETOOTH_BUTTON_CONNECT -> { // Если в данный момент сервис Bluetooth подключения не запущен
@@ -188,6 +202,7 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
                         dialog.dismiss() // Закрытие диалогового окна
                         updateUsers() // Обновление списка пользователей
                     }
+                    sendBroadcast(Intent(TerminalFragment.Constants.ACTION)) // Оповестить фрагмент терминала о добавлении пользователя
                 }
             }
 
@@ -203,7 +218,8 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
                 users.add(ListUser.fromUser(it))
             }
             adapter.submitList(users) // Загрузка пользователей в список пользователей
-            binding.swipeRefresh.isRefreshing = false // Остановка анимации обновления списка девайсов
+            binding.swipeRefresh.isRefreshing =
+                false // Остановка анимации обновления списка девайсов
         }
     }
 
@@ -215,7 +231,12 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
     override fun onOptionsItemSelected(item: MenuItem): Boolean { // Вызывается при нажатии на элемент в панели меню
         when (item.itemId) {
             R.id.action_commands -> { // Если нажата кнопка "Commands"
-                startActivity(Intent(this, CommandsActivity::class.java)) // Запуск активности управления командами
+                startActivity(
+                    Intent(
+                        this,
+                        CommandsActivity::class.java
+                    )
+                ) // Запуск активности управления командами
             }
         }
         return super.onOptionsItemSelected(item)
@@ -291,7 +312,10 @@ class MainActivity : AppCompatActivity(), BluetoothListenersManager.BluetoothLis
         } // Добавление нового пользователя-отправителя в список пользователей, если его ещё нет в списке
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) { // Вызывается при изменении значений хранилища примитивных данных чата
+    override fun onSharedPreferenceChanged(
+        sharedPreferences: SharedPreferences?,
+        key: String?
+    ) { // Вызывается при изменении значений хранилища примитивных данных чата
         if (key == SharedPreferencesConstants.CHAT_SIGN) {
             val sign = sharedPreferences?.getString(SharedPreferencesConstants.CHAT_SIGN, "") ?: ""
             if (sign.isEmpty()) {
